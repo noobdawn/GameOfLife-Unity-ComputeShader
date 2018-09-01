@@ -1,0 +1,71 @@
+﻿// kernel is GameOfLifeUpdate
+#pragma kernel GameOfLifeUpdate
+#pragma kernel UpdateNext
+
+struct Cell
+{
+	float4 xynn;	//四通道信息为：x轴位置、y轴位置、当前是否活着，下一刻是否活着（活着=1）
+};
+
+RWStructuredBuffer<Cell> Cells;
+//用来输出给C#进行展示
+RWTexture2D<float4> GameTex;
+//定义活着和死了的颜色
+float4 AliveColor;
+float4 DeadColor;
+//定义边界
+float4 BorderVec;
+
+
+bool IsCellAlive(int x, int y)
+{
+	if (x < BorderVec.x || x >= BorderVec.y || y < BorderVec.z || y >= BorderVec.w)
+		return false;
+	return Cells[x + y * BorderVec.y].xynn.z == 1;
+}
+
+//展示并统计
+[numthreads(32, 32, 1)]
+void GameOfLifeUpdate (uint3 id : SV_DispatchThreadID)
+{
+	int product = id.x + id.y * BorderVec.y;
+	Cell curCell = Cells[product];
+	//展示上一回合的生命结果
+	if (curCell.xynn.z == 1)
+		GameTex[id.xy] = AliveColor;
+	else
+		GameTex[id.xy] = DeadColor;
+	//计算邻居存活数
+	int liveNum = 0;
+	if (IsCellAlive(id.x-1, id.y-1)) liveNum++;
+	if (IsCellAlive(id.x-1, id.y)) liveNum++;
+	if (IsCellAlive(id.x-1, id.y+1)) liveNum++;
+	if (IsCellAlive(id.x+1, id.y-1)) liveNum++;
+	if (IsCellAlive(id.x+1, id.y)) liveNum++;
+	if (IsCellAlive(id.x+1, id.y+1)) liveNum++;
+	if (IsCellAlive(id.x, id.y-1)) liveNum++;
+	if (IsCellAlive(id.x, id.y+1)) liveNum++;
+	//生命游戏规则
+	if (curCell.xynn.z == 1)
+	{
+		if (liveNum < 2)
+			curCell.xynn.w = 0;
+		else if (liveNum < 4)
+			curCell.xynn.w = curCell.xynn.z;
+		else
+			curCell.xynn.w = 0;
+	}
+	else if (liveNum == 3)
+	{
+		curCell.xynn.w = 1;
+	}
+	Cells[product] = curCell;
+}
+
+//当前状态变更
+[numthreads(32, 32, 1)]
+void UpdateNext(uint3 id : SV_DispatchThreadID)
+{
+	int product = id.x + id.y * BorderVec.y;
+	Cells[product].xynn.z = Cells[product].xynn.w;
+}
